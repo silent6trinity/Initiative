@@ -1,18 +1,17 @@
 import sys
 import random
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QPushButton,
-    QHBoxLayout, QInputDialog, QScrollArea, QFrame, QSizePolicy
+    QHBoxLayout, QInputDialog, QScrollArea, QFrame, QSizePolicy, QGraphicsOpacityEffect
 )
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QTimer
+from PySide6.QtGui import QFont
 
-from PySide6.QtGui import QFont, QIcon, QPixmap, QPainter, QColor
-from PySide6.QtWidgets import QGraphicsOpacityEffect
-
-
-TEST_CHARACTERS = ["Boblin", "Meat", "Branch", "Huff", "Timmy"]
+# Test characters if using -test
+TEST_CHARACTERS = ["Boblin", "Meat", "Branch", "Huff", "Timmy", "BBEG", "Monster 1", "Monster 2"]
 
 class TrackerState:
+    """Central Game State management"""
     def __init__(self, characters):
         self.characters = characters
         self.dead_flags = [False] * len(characters)
@@ -30,12 +29,11 @@ class TrackerState:
         original_index = self.turn_index
         n = len(self.characters)
         for i in range(1, n+1):
-            next_index = (self.turn_index + delta*i) % n
+            next_index = (self.turn_index + delta * i) % n
             if not self.dead_flags[next_index]:
                 self.turn_index = next_index
                 self.notify_all()
                 return
-        # fallback to original if everyone is dead
         self.turn_index = original_index
         self.notify_all()
 
@@ -52,6 +50,7 @@ class AnimatedCard(QFrame):
         self.index = index
         self.on_dead_toggle = on_dead_toggle
         self.name = name
+
         self.setGraphicsEffect(QGraphicsOpacityEffect(self))
         self.opacity_effect = self.graphicsEffect()
 
@@ -64,10 +63,10 @@ class AnimatedCard(QFrame):
 
         self.left = QVBoxLayout()
         self.name_label = QLabel(name)
-        self.name_label.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        self.name_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         self.turn_label = QLabel("CURRENT TURN")
-        self.turn_label.setFont(QFont("Segoe UI", 10, italic=True))
-        self.turn_label.setStyleSheet("color: #a8d8ff;")
+        self.turn_label.setFont(QFont("Segoe UI", 12, italic=True))
+        self.turn_label.setStyleSheet("color: #30fc03; padding: 2px 8px;")
         self.left.addWidget(self.name_label)
         self.left.addWidget(self.turn_label)
         layout.addLayout(self.left)
@@ -93,7 +92,7 @@ class AnimatedCard(QFrame):
         else:
             bg = '#304050' if is_current else '#1e1e1e'
             border = '#88ccff' if is_current else '#333'
-            self.setStyleSheet(f"background-color: {bg}; border: 2px solid {border}; border-radius: 10px;")
+            self.setStyleSheet(f"background-color: {bg}; border: 0px solid {border}; border-radius: 10px;")
             self.name_label.setText(self.name)
             self.name_label.setStyleSheet("color: white;")
             self.turn_label.setVisible(is_current)
@@ -126,7 +125,7 @@ class TurnTracker(QWidget):
         self.state.subscribe(self)
 
         self.setWindowTitle("🧭 Turn Tracker")
-        self.setGeometry(400, 200, 420, 600)
+        self.setGeometry(800, 400, 520, 600)
         self.setStyleSheet("background-color: #121212; color: #ffffff;")
 
         self.layout = QVBoxLayout(self)
@@ -164,7 +163,7 @@ class TurnTracker(QWidget):
                     background-color: #444444;
                 }
             """)
-            btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
             btns.addWidget(btn)
         self.layout.addLayout(btns)
 
@@ -175,6 +174,8 @@ class TurnTracker(QWidget):
         for i in reversed(range(self.scroll_layout.count())):
             self.scroll_layout.itemAt(i).widget().deleteLater()
         self.cards.clear()
+
+        current_card = None
 
         for i, (name, _) in enumerate(self.state.characters):
             is_current = (i == self.state.turn_index and not self.state.dead_flags[i])
@@ -188,7 +189,12 @@ class TurnTracker(QWidget):
             self.cards.append(card)
 
             if is_current and not self.state.dead_flags[i]:
+                current_card = card
                 QTimer.singleShot(50, card.play_entrance_animation)
+
+        # ✅ Scroll to current card
+        if current_card:
+            QTimer.singleShot(100, lambda: self.scroll.ensureWidgetVisible(current_card))
 
 def get_characters(test_mode=False):
     if test_mode:
